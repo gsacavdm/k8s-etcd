@@ -28,17 +28,30 @@ apt update && apt install -y etcd-client
 
 POD_IP=<COPY POD IP FROM ABOVE>
 etcdctl --endpoints=http://$POD_IP:4001 ls
-etcdctl --endpoints=http://$POD_IP:4001 set mykey myvalue
-etcdctl --endpoints=http://$POD_IP:4001 get mykey
+etcdctl --endpoints=http://$POD_IP:4001 set mykey-local myvalue-local
+etcdctl --endpoints=http://$POD_IP:4001 get mykey-local
 etcdctl --endpoints=http://$POD_IP:4001 ls
 ```
 
 ## Option 2
-Doesn't work, I suspect because of the reverse proxy results in calls via `127.0.0.1` whereas etcd isn't set up with this IP in its `advertise-client-urls`. Rather, I need to add a service properly and use that to call it instead of using the reverse proxy.
+
+> **NOTE**: In order for this to work, need to add `127.0.0.1:4001` to `ETCD_ADVERTISE_CLIENT_URLS` in `deployment.yaml` as follows:
+> ```
+>        - name: ETCD_ADVERTISE_CLIENT_URLS
+>          value: "http://$(HOST_IP):2379,http://$(HOST_IP):4001,http://127.0.0.1:4001"
+> ```
 
 ```
 POD_NAME=$(k get pods -o jsonpath='{.items[0].metadata.name}')
 k port-forward pod/$POD_NAME 4001
 
 etcdctl --endpoints=http://localhost:4001 ls
+etcdctl --endpoints=http://localhost:4001 set mykey-remote myvalue-remote
+etcdctl --endpoints=http://localhost:4001 get mykey-remote
+etcdctl --endpoints=http://localhost:4001 ls
+
 ```
+
+# Scaling
+At this point, scaling the deployment will result in more **INDEPENDENT** etcd instances, not a clustered etcd deployment.
+For that the config needs to be changed as described in etcd's [Clustering Guide](https://etcd.io/docs/v2.3/clustering/#static) but we'll need to use stateful sets and a service so that we have declarative URLs that we can use for each replica. That'll come in the next PR.
