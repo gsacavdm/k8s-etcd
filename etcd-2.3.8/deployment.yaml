@@ -28,27 +28,32 @@ spec:
             memory: "3Gi"
             cpu: "0.25"
         ports:
-          - containerPort: 4001
+        - containerPort: 4001
+        - containerPort: 2380
+        - containerPort: 2379
         env:
-        - name: "HOST_IP"
+        - name: POD_NAME
           valueFrom:
             fieldRef:
-              fieldPath: status.podIP
-        args: 
-        - "-name"
-        - "etcd0"
-        - "-advertise-client-urls"
-        - "http://$(HOST_IP):2379,http://$(HOST_IP):4001"
-        - "-listen-client-urls"
-        - "http://0.0.0.0:2379,http://0.0.0.0:4001"
-        - "-initial-advertise-peer-urls"
-        - "http://$(HOST_IP):2380"
-        - "-listen-peer-urls"
-        - "http://0.0.0.0:2380"
-        - "-initial-cluster-token"
-        - "etcd-cluster-1"
-        - "-initial-cluster"
-        - "etcd0=http://$(HOST_IP):2380"
-        - "-initial-cluster-state"
-        - "new"
+              fieldPath: metadata.name
+        - name: HOST_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP 
+        - name: ETCD_NAME
+          value: "$(POD_NAME)"
+        - name: ETCD_ADVERTISE_CLIENT_URLS
+          value: "http://$(HOST_IP):2379,http://$(HOST_IP):4001"
+        - name: ETCD_LISTEN_CLIENT_URLS
+          value: "http://0.0.0.0:2379,http://0.0.0.0:4001"
+        - name: ETCD_INITIAL_ADVERTISE_PEER_URLS 
+          value: "http://$(HOST_IP):2380"
+        - name: ETCD_LISTEN_PEER_URLS
+          value: "http://0.0.0.0:2380"
+        - name: ETCD_INITIAL_CLUSTER
+          value: "$(POD_NAME)=http://$(HOST_IP):2380"
+        - name: ETCD_INITIAL_CLUSTER_TOKEN
+          value: "$(POD_NAME)"
+        - name: ETCD_INITIAL_CLUSTER_STATE
+          value: "new"
       terminationGracePeriodSeconds: 30

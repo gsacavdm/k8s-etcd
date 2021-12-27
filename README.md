@@ -23,6 +23,9 @@ k get pods -o jsonpath='{.items[0].status.podIP}'
 # Run a temporary pod to test out etcd
 k run -it --rm shell --image=ubuntu:20.04 bash
 
+# Install etcdctl
+apt update && apt install -y etcd-client
+
 POD_IP=<COPY POD IP FROM ABOVE>
 etcdctl --endpoints=http://$POD_IP:4001 ls
 etcdctl --endpoints=http://$POD_IP:4001 set mykey myvalue
