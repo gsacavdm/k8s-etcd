@@ -9,76 +9,71 @@ az login
 az account set -s $SUBSCRIPTION_NAME
 az aks get-credentials --admin -n $AKS_NAME -g $AKS_RG_NAME
 
-k config set-context --current --namespace etcd-2
-k apply -f etcd-2.3.8/deployment.yaml
+kubectl config set-context --current --namespace etcd-2
+kubectl apply -f etcd-2.3.8/deployment.yaml
 ```
 
 # Test
 
 ## Option 1
 ```
-# Get the IP of the pod
-k get pods -o jsonpath='{.items[0].status.podIP}'
-
 # Run a temporary pod to test out etcd
-k run -it --rm shell --image=ubuntu:20.04 bash
+kubectl run -it --rm shell --image=ubuntu:20.04 bash
 
 # Install etcdctl
 apt update && apt install -y etcd-client
 
 POD_IP=<COPY POD IP FROM ABOVE>
-etcdctl --endpoints=http://$POD_IP:4001 ls
-etcdctl --endpoints=http://$POD_IP:4001 set mykey-local myvalue-local
-etcdctl --endpoints=http://$POD_IP:4001 get mykey-local
-etcdctl --endpoints=http://$POD_IP:4001 ls
+etcdctl --endpoints=http://etcd.etcd-2.cluster.svc.local:4001 ls
+etcdctl --endpoints=http://etcd.etcd-2.cluster.svc.local:4001 set mykey-local myvalue-local
+etcdctl --endpoints=http://etcd.etcd-2.cluster.svc.local:4001 get mykey-local
+etcdctl --endpoints=http://etcd.etcd-2.cluster.svc.local:4001 ls
 ```
 
 ## Option 2
 
-> **NOTE**: In order for this to work, need to add `127.0.0.1:4001` to `ETCD_ADVERTISE_CLIENT_URLS` in `deployment.yaml` as follows:
+> **NOTE**: In order for this to work, need to add `127.0.0.1:4001` to `ETCD_ADVERTISE_CLIENT_URLS` in `statefulset.yaml` as follows:
 > ```
 >        - name: ETCD_ADVERTISE_CLIENT_URLS
->          value: "http://$(HOST_IP):2379,http://$(HOST_IP):4001,http://127.0.0.1:4001"
+>          value: "http://$(HOST_IP):2379,http://$(HOST_IP):4001,http://etcd.etcd-2.svc.cluster.local:4001,http://127.0.0.1:4001"
 > ```
 
 ```
-POD_NAME=$(k get pods -o jsonpath='{.items[0].metadata.name}')
-k port-forward pod/$POD_NAME 4001
+kubectl port-forward pod/etcd-0 4001
+
+# Install etcdctl on your host if necessary via apt install etcd-client
 
 etcdctl --endpoints=http://localhost:4001 ls
 etcdctl --endpoints=http://localhost:4001 set mykey-remote myvalue-remote
 etcdctl --endpoints=http://localhost:4001 get mykey-remote
 etcdctl --endpoints=http://localhost:4001 ls
-
 ```
 
 # Scaling
-At this point, scaling the deployment will result in more **INDEPENDENT** etcd instances, not a clustered etcd deployment.
-For that the config needs to be changed as described in etcd's [Clustering Guide](https://etcd.io/docs/v2.3/clustering/#static) but we'll need to use stateful sets and a service so that we have declarative URLs that we can use for each replica. That'll come in the next PR.
+At this point, we're setting up etcd using [static discovery](https://etcd.io/docs/v2.3/clustering/#static)
+as observed from the `env:` section of `stateful-set.yaml`.
 
+This means that you can't use `kubectl scale sts etcd --replicas=SOMEVALUE`.
+* If `SOMEVALUE` is greater than the starting number (and the list of entries in the env var `ETCD_INITIAL_CLUSTER`, the new pods will error out indicating:
+    > couldn't find local name "etcd-SOMEVALUE" in the initial cluster configuration
+* If `SOMEVALUE` is less than the starting number (and the list of entries in the env var `ETCD_INITIAL_CLUSTER`... I don't know yet, need to test this.
+
+It's entirely possible some tweaks can be done to the initial setup or something else to support scaling but that's TBD.
+
+For now, scaling requires manually updating the `stateful-set.yaml` file with the following changes:
+1. Update `spec.replicas` accordingly
+1. Update `spec.template.spec.containers[0].env` with name `ETCD_INITIAL_CLUSTER` to add/remove entries to match `replicas` - 1.
+
+Then you can apply the update as follows:
+> IMPORTANT: You need to delete the existing stateful-set first otherwise, given Kubernetes' rollout policy, you mmight get conflicts between the replicas with the old config and the new replicas with the new config. TODO fix here is to generate a unique `ETCD_INITIAL_CLUSTER_TOKEN` (maybe?)
 ```
-k get pods
-
-k scale deployment etcd --replicas=3
-
-k get pods
-```
-
-You can also see how AKS auto-scales and adds more nodes if you scale to 7 replicas
-```
-k get nodes
-k get pods -o wide
-
-k scale deployment etcd --replicas=7
-
-k get nodes
-k get pods -o wide
-
-k scale deployment etcd --replicas=3
-
-k get nodes
-k get pods -o wide
+kubectl delete sts etcd
+kubectl apply -f stateful-set.yaml
 ```
 
-Confirm they are acting independently following [Option #1](#option-1) or [Option #2](#option-2) above and reading and writing from each replica to see that they are independent.
-
+# TODO
+* Improve this readme with an overview and more context
+* Test to see if scale down works
+* Figure out if I can get scale up working with static discovery
+* Try out the discovery service
+* Add etcd 3x
