@@ -55,3 +55,30 @@ etcdctl --endpoints=http://localhost:4001 ls
 # Scaling
 At this point, scaling the deployment will result in more **INDEPENDENT** etcd instances, not a clustered etcd deployment.
 For that the config needs to be changed as described in etcd's [Clustering Guide](https://etcd.io/docs/v2.3/clustering/#static) but we'll need to use stateful sets and a service so that we have declarative URLs that we can use for each replica. That'll come in the next PR.
+
+```
+k get pods
+
+k scale deployment etcd --replicas=3
+
+k get pods
+```
+
+You can also see how AKS auto-scales and adds more nodes if you scale to 7 replicas
+```
+k get nodes
+k get pods -o wide
+
+k scale deployment etcd --replicas=7
+
+k get nodes
+k get pods -o wide
+
+k scale deployment etcd --replicas=3
+
+k get nodes
+k get pods -o wide
+```
+
+Confirm they are acting independently following [Option #1](#option-1) or [Option #2](#option-2) above and reading and writing from each replica to see that they are independent.
+
