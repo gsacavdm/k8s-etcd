@@ -1,6 +1,7 @@
 # Overview
 This repo is an amateur exploratory setup of a clustered etcd cluster in Kubernetes.
-**DO NOT USE THIS FOR PRODUCTION**, this is just me playing around.
+
+> **DO NOT USE THIS FOR PRODUCTION**, this is just me playing around.
 
 # Connect to your Kubernetes Cluster
 > Note: This assumes you're using Azure Kubernetes Service
@@ -16,7 +17,7 @@ az aks get-credentials --admin -n $AKS_NAME -g $AKS_RG_NAME
 ```
 
 # Deploy Etcd
->Note: Everything below works exactly the same for etcd v2 and etcd v3, just swap out all `-2` for -3` cd into the appropriate folder in this repo.
+> Note: Everything below works exactly the same for etcd v2 and etcd v3, just swap out all `-2` for -3` cd into the appropriate folder in this repo.
 ```
 kubectl config set-context --current --namespace etcd-2
 kubectl create namespace etcd-2
@@ -25,7 +26,7 @@ cd etcd-2.3.8
 kubectl apply -f stateful-set.yaml
 ```
 
-# Test Etc
+# Test Etcd
 
 ## Option 1
 This options entails creating a separate pod in the cluster in which you'll install etcdctl to talk to etcd from within K8s.
@@ -47,7 +48,7 @@ etcdctl --endpoints=http://etcd.etcd-2.cluster.svc.local:4001 ls
 ## Option 2
 This options entails using K8s' port forwarding to connect to one of the etcd replicas and talk to it directly. This unfortunately requires tweaking the etcd config to recognize localhost as an address it should respond to and thus is a much less desirable option. 
 
-> **NOTE**: In order for this to work, need to add `127.0.0.1:4001` to `ETCD_ADVERTISE_CLIENT_URLS` in `statefulset.yaml` as follows:
+> Note: In order for this to work, need to add `127.0.0.1:4001` to `ETCD_ADVERTISE_CLIENT_URLS` in `statefulset.yaml` as follows:
 > ```
 >        - name: ETCD_ADVERTISE_CLIENT_URLS
 >          value: "http://$(HOST_IP):2379,http://$(HOST_IP):4001,http://etcd.etcd-2.svc.cluster.local:4001,http://127.0.0.1:4001"
@@ -92,6 +93,8 @@ Then you can apply the update as follows:
 kubectl delete sts etcd
 kubectl apply -f stateful-set.yaml
 ```
+
+> Note: Btw, you can also check out the sad first stab at this using k8s deployments instead of stateful sets, in which the instances weren't clustered :P For that, check out the [NonClustered tag](https://github.com/gsacavdm/k8s-etcd/tree/NonClustered)
 
 # TODO
 * Try out the discovery service to see I can get scaling working
