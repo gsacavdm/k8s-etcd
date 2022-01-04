@@ -1,21 +1,35 @@
-# Deploy
-```
-$SUBSCRIPTION_NAME=
+# Overview
+This repo is an amateur exploratory setup of a clustered etcd cluster in Kubernetes.
+**DO NOT USE THIS FOR PRODUCTION**, this is just me playing around.
 
-$AKS_RG_NAME=
-$AKS_NAME=
+# Connect to your Kubernetes Cluster
+> Note: This assumes you're using Azure Kubernetes Service
+```
+$SUBSCRIPTION_NAME="<Name of the subscription where your AKS cluster lives here>"
+
+$AKS_RG_NAME="<Name of the resource group where your AKS cluster lives here>"
+$AKS_NAME="<Name of your AKS cluster here>"
 
 az login
 az account set -s $SUBSCRIPTION_NAME
 az aks get-credentials --admin -n $AKS_NAME -g $AKS_RG_NAME
-
-kubectl config set-context --current --namespace etcd-2
-kubectl apply -f etcd-2.3.8/deployment.yaml
 ```
 
-# Test
+# Deploy Etcd
+>Note: Everything below works exactly the same for etcd v2 and etcd v3, just swap out all `-2` for -3` cd into the appropriate folder in this repo.
+```
+kubectl config set-context --current --namespace etcd-2
+kubectl create namespace etcd-2
+
+cd etcd-2.3.8
+kubectl apply -f stateful-set.yaml
+```
+
+# Test Etc
 
 ## Option 1
+This options entails creating a separate pod in the cluster in which you'll install etcdctl to talk to etcd from within K8s.
+
 ```
 # Run a temporary pod to test out etcd
 kubectl run -it --rm shell --image=ubuntu:20.04 bash
@@ -31,6 +45,7 @@ etcdctl --endpoints=http://etcd.etcd-2.cluster.svc.local:4001 ls
 ```
 
 ## Option 2
+This options entails using K8s' port forwarding to connect to one of the etcd replicas and talk to it directly. This unfortunately requires tweaking the etcd config to recognize localhost as an address it should respond to and thus is a much less desirable option. 
 
 > **NOTE**: In order for this to work, need to add `127.0.0.1:4001` to `ETCD_ADVERTISE_CLIENT_URLS` in `statefulset.yaml` as follows:
 > ```
@@ -48,6 +63,13 @@ etcdctl --endpoints=http://localhost:4001 set mykey-remote myvalue-remote
 etcdctl --endpoints=http://localhost:4001 get mykey-remote
 etcdctl --endpoints=http://localhost:4001 ls
 ```
+
+## Option 3
+Obviously there's the more production grade option of exposing the service as a load balancer, you can do that by modifyin the service as follows:
+1. Removing `spec.clusterIP: None` entry (need to confirm this)
+1. Add `spec.type: LoadBalancer`
+1. (Azure only) Add `metadata.annotations.service.beta.kubernetes.io/azure-dns-label-name: your-unique-dns-label` per [AKS Docs on Using a Load Balancer](https://docs.microsoft.com/en-us/azure/aks/load-balancer-standard#additional-customizations-via-kubernetes-annotations)
+1. Add Auth (don't be another casualty of exposed assets on the internet) and a bunch of other stuff to make it real like custom domain name, etc, etc.
 
 # Scaling
 At this point, we're setting up etcd using [static discovery](https://etcd.io/docs/v2.3/clustering/#static)
@@ -72,6 +94,5 @@ kubectl apply -f stateful-set.yaml
 ```
 
 # TODO
-* Improve this readme with an overview and more context
-* Try out the discovery service
-* Add etcd 3x
+* Try out the discovery service to see I can get scaling working
+* Add auth?
