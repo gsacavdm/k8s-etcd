@@ -54,9 +54,9 @@ At this point, we're setting up etcd using [static discovery](https://etcd.io/do
 as observed from the `env:` section of `stateful-set.yaml`.
 
 This means that you can't use `kubectl scale sts etcd --replicas=SOMEVALUE`.
-* If `SOMEVALUE` is greater than the starting number (and the list of entries in the env var `ETCD_INITIAL_CLUSTER`, the new pods will error out indicating:
-    > couldn't find local name "etcd-SOMEVALUE" in the initial cluster configuration
-* If `SOMEVALUE` is less than the starting number (and the list of entries in the env var `ETCD_INITIAL_CLUSTER`... I don't know yet, need to test this.
+* If `SOMEVALUE` is greater than the starting number (and the list of entries in the env var `ETCD_INITIAL_CLUSTER`, the new pods will error out indicating *couldn't find local name "etcd-SOMEVALUE" in the initial cluster configuration*. You can still recover from this by scaling back to the original number of replicas.
+* If `SOMEVALUE` is less than the starting number but still enough to achieve quorum, everything will continue to work though the primary replica will endlessly show errors in the log that it can't communicate with the missing replicas. You can't recover from this by scaling back to the original number of replicas as the new ones that kubernetes creates will fail registartion with the error *member XXX has already been bootstrapped*. At this point you need to delete all the pods or the stateful set.
+* If `SOMEVALUE` is less than what's needed for quorum for the starting number (and the list of entries in the env var `ETCD_INITIAL_CLUSTER`, the remaining pods cycle starting new elections and unable to get quorum. Read commands will work but writes won't. You can't recover from this by scaling back to the original number of replicas as the new ones that kubernetes creates will fail registration with the error *member XXX has already been bootstrapped*. At this point you need to delete all the pods or the stateful set.
 
 It's entirely possible some tweaks can be done to the initial setup or something else to support scaling but that's TBD.
 
@@ -73,7 +73,5 @@ kubectl apply -f stateful-set.yaml
 
 # TODO
 * Improve this readme with an overview and more context
-* Test to see if scale down works
-* Figure out if I can get scale up working with static discovery
 * Try out the discovery service
 * Add etcd 3x
